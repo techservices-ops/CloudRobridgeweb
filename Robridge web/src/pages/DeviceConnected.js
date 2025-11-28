@@ -96,7 +96,7 @@ const DeviceConnected = () => {
 
   const refreshDevices = async () => {
     try {
-      const response = await fetch('https://robridge-express.onrender.com/api/esp32/devices');
+      const response = await fetch('https://robridgeexpress.onrender.com/api/esp32/devices');
       const data = await response.json();
       if (data.success) {
         // The WebSocket context will handle updating the devices

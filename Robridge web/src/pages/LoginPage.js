@@ -44,22 +44,22 @@ const LoginPage = () => {
       return;
     }
 
-    // Simulate login process
+    // Call the login function from auth context
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Call the login function from auth context with role-based validation
-      const result = login(formData.email, formData.password);
+      const result = await login(formData.email, formData.password);
       
       if (result.success) {
-        setSuccess(result.message);
-        // The AuthContext will handle the redirect automatically
+        setSuccess(result.message || 'Login successful! Redirecting...');
+        // Redirect after short delay
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 1000);
       } else {
-        setError(result.message);
+        setError(result.message || 'Login failed. Please try again.');
       }
       
     } catch (err) {
+      console.error('Login error:', err);
       setError('Login failed. Please try again.');
     } finally {
       setIsLoading(false);
@@ -188,7 +188,37 @@ const LoginPage = () => {
               <FaUser />
               <div className="btn-content">
                 <span className="btn-title">Expo User</span>
-                <span className="btn-subtitle">Dashboard, Scanner, Device</span>
+                <span className="btn-subtitle">user@expo.com / expo123</span>
+              </div>
+            </button>
+            
+            <button 
+              type="button" 
+              className="credential-btn admin-btn"
+              onClick={() => {
+                setFormData({ email: 'admin@robridge.com', password: 'admin123' });
+              }}
+              disabled={isLoading}
+            >
+              <FaUser />
+              <div className="btn-content">
+                <span className="btn-title">Admin</span>
+                <span className="btn-subtitle">admin@robridge.com / admin123</span>
+              </div>
+            </button>
+            
+            <button 
+              type="button" 
+              className="credential-btn full-btn"
+              onClick={() => {
+                setFormData({ email: 'user@robridge.com', password: 'full123' });
+              }}
+              disabled={isLoading}
+            >
+              <FaUser />
+              <div className="btn-content">
+                <span className="btn-title">Full Access</span>
+                <span className="btn-subtitle">user@robridge.com / full123</span>
               </div>
             </button>
           </div>

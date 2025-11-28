@@ -73,7 +73,7 @@ const Dashboard = () => {
       try {
         setLoading(true);
         const serverURL = process.env.NODE_ENV === 'production' 
-          ? 'https://robridge-express.onrender.com' 
+          ? 'https://robridgeexpress.onrender.com' 
           : 'http://localhost:3001';
         const response = await fetch(`${serverURL}/api/system/status`);
         const data = await response.json();

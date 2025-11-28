@@ -17,7 +17,7 @@ const ScannedBarcodes = () => {
     setLoading(true);
     try {
       console.log('Fetching scanned barcodes from API...');
-      const serverURL = 'https://robridge-express.onrender.com';
+      const serverURL = 'https://robridgeexpress.onrender.com';
       const response = await fetch(`${serverURL}/api/barcodes/scanned?limit=1000&t=${Date.now()}`);
       const data = await response.json();
       console.log('Scanned barcodes API Response:', data);
@@ -96,7 +96,7 @@ const ScannedBarcodes = () => {
         metadata = {};
       }
 
-      const response = await fetch('https://robridge-express.onrender.com/api/save-scan', {
+      const response = await fetch('https://robridgeexpress.onrender.com/api/save-scan', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -144,7 +144,7 @@ const ScannedBarcodes = () => {
     }
 
     try {
-      const response = await fetch(`https://robridge-express.onrender.com/api/barcodes/${barcodeId}`, {
+      const response = await fetch(`https://robridgeexpress.onrender.com/api/barcodes/${barcodeId}`, {
         method: 'DELETE',
       });
 

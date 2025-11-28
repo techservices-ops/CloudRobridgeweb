@@ -44,7 +44,7 @@ const ProductManagement = () => {
 
   const loadAvailableRacks = async () => {
     try {
-      const response = await fetch('https://robridge-express.onrender.com/api/racks');
+      const response = await fetch('https://robridgeexpress.onrender.com/api/racks');
       const data = await response.json();
       
       if (data.success) {
@@ -138,7 +138,7 @@ const ProductManagement = () => {
       // Update rack quantity if rack ID is provided
       if (formData.rackId) {
         try {
-          const rackUpdateResponse = await fetch(`https://robridge-express.onrender.com/api/racks/${formData.rackId}/update-quantity`, {
+          const rackUpdateResponse = await fetch(`https://robridgeexpress.onrender.com/api/racks/${formData.rackId}/update-quantity`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

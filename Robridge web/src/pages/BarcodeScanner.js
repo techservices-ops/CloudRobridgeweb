@@ -44,7 +44,7 @@ const BarcodeScanner = () => {
     }
 
     try {
-      const response = await fetch('https://robridge-express.onrender.com/api/save-scan', {
+      const response = await fetch('https://robridgeexpress.onrender.com/api/save-scan', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

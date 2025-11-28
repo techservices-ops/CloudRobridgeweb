@@ -35,8 +35,8 @@ const char* ssid = "Barista";
 const char* password = "q7rfdrg4";
 
 // --- Robridge Server Configuration ---
-String expressServerURL = "https://robridge-express.onrender.com";  // Express backend
-String aiServerURL = "https://robridge-ai.onrender.com";  // AI server - Render hosted
+String expressServerURL = "https://robridgeexpress.onrender.com";  // Express backend
+String aiServerURL = "https://robridgeaiserver.onrender.com";  // AI server - Render hosted
 String customServerIP = "";  // Custom server IP from portal
 
 // --- ESP32 Device Configuration ---
@@ -789,8 +789,8 @@ void updateServerURLs() {
     debugPrint("AI: " + aiServerURL);
   } else {
     // Use default cloud URLs
-    expressServerURL = "https://robridge-express.onrender.com";
-    aiServerURL = "https://robridge-ai.onrender.com";
+    expressServerURL = "https://robridgeexpress.onrender.com";
+    aiServerURL = "https://robridgeaiserver.onrender.com";
     debugPrint("Using default cloud server URLs");
   }
 }

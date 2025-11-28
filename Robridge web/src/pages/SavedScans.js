@@ -18,7 +18,7 @@ const SavedScans = () => {
     try {
       console.log('Fetching saved scans from API...');
       // Use the saved-scans endpoint to get only manually saved scans
-      const response = await fetch('https://robridge-express.onrender.com/api/saved-scans');
+      const response = await fetch('https://robridgeexpress.onrender.com/api/saved-scans');
       const data = await response.json();
       console.log('Saved scans API Response:', data);
       
@@ -84,7 +84,7 @@ const SavedScans = () => {
     }
 
     try {
-      const response = await fetch(`https://robridge-express.onrender.com/api/saved-scans/${scanId}`, {
+      const response = await fetch(`https://robridgeexpress.onrender.com/api/saved-scans/${scanId}`, {
         method: 'DELETE',
       });
 
@@ -136,7 +136,7 @@ const SavedScans = () => {
     }
 
     try {
-      const response = await fetch('https://robridge-express.onrender.com/api/saved-scans/clear', {
+      const response = await fetch('https://robridgeexpress.onrender.com/api/saved-scans/clear', {
         method: 'DELETE'
       });
       

@@ -36,7 +36,7 @@ const RackStatus = () => {
   const loadRackStatus = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('https://robridge-express.onrender.com/api/rack-status');
+      const response = await fetch('https://robridgeexpress.onrender.com/api/rack-status');
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

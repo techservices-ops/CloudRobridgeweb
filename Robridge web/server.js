@@ -5,6 +5,8 @@ const cors = require('cors');
 const http = require('http');
 const socketIo = require('socket.io');
 const { Pool } = require('pg');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const server = http.createServer(app);
@@ -18,8 +20,9 @@ const io = socketIo(server, {
 
 // Render-compatible configuration
 const PORT = process.env.PORT || 3001;
-const AI_SERVER_URL = process.env.AI_SERVER_URL || 'http://localhost:8000';
+const AI_SERVER_URL = process.env.AI_SERVER_URL || 'https://robridgeaiserver.onrender.com';
 const NODE_ENV = process.env.NODE_ENV || 'development';
+const JWT_SECRET = process.env.JWT_SECRET || 'robridge-secret-key-change-in-production-2024';
 
 console.log('Server Configuration:');
 console.log(`   PORT: ${PORT}`);
@@ -195,6 +198,271 @@ app.get('/api/system/status', (req, res) => {
 // Simple health endpoint for convenience
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// ======================
+// AUTHENTICATION ENDPOINTS
+// ======================
+
+// User Registration
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { email, password, name, role = 'expo_user' } = req.body;
+
+    // Validation
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email and password are required'
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: 'Password must be at least 6 characters long'
+      });
+    }
+
+    // Check if user already exists
+    const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [email.toLowerCase()]);
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'User with this email already exists'
+      });
+    }
+
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Insert user
+    const result = await pool.query(
+      `INSERT INTO users (email, password_hash, name, role) 
+       VALUES ($1, $2, $3, $4) 
+       RETURNING id, email, name, role, created_at`,
+      [email.toLowerCase(), passwordHash, name || email.split('@')[0], role]
+    );
+
+    const user = result.rows[0];
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { 
+        id: user.id, 
+        email: user.email, 
+        role: user.role 
+      },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      success: true,
+      message: 'User registered successfully',
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error('Error registering user:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to register user'
+    });
+  }
+});
+
+// User Login
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Validation
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email and password are required'
+      });
+    }
+
+    // Find user
+    const result = await pool.query(
+      'SELECT id, email, password_hash, name, role, is_active FROM users WHERE email = $1',
+      [email.toLowerCase()]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid email or password'
+      });
+    }
+
+    const user = result.rows[0];
+
+    // Check if user is active
+    if (!user.is_active) {
+      return res.status(403).json({
+        success: false,
+        error: 'Account is deactivated'
+      });
+    }
+
+    // Verify password
+    const passwordMatch = await bcrypt.compare(password, user.password_hash);
+    if (!passwordMatch) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid email or password'
+      });
+    }
+
+    // Update last login
+    await pool.query(
+      'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1',
+      [user.id]
+    );
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { 
+        id: user.id, 
+        email: user.email, 
+        role: user.role 
+      },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      success: true,
+      message: 'Login successful',
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error('Error during login:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Login failed. Please try again.'
+    });
+  }
+});
+
+// Verify Token
+app.get('/api/auth/verify', authenticateToken, async (req, res) => {
+  try {
+    // Get fresh user data from database
+    const result = await pool.query(
+      'SELECT id, email, name, role, is_active FROM users WHERE id = $1',
+      [req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    const user = result.rows[0];
+
+    if (!user.is_active) {
+      return res.status(403).json({
+        success: false,
+        error: 'Account is deactivated'
+      });
+    }
+
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error('Error verifying token:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Token verification failed'
+    });
+  }
+});
+
+// Change Password
+app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'Current password and new password are required'
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: 'New password must be at least 6 characters long'
+      });
+    }
+
+    // Get user's current password hash
+    const result = await pool.query(
+      'SELECT password_hash FROM users WHERE id = $1',
+      [req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    // Verify current password
+    const passwordMatch = await bcrypt.compare(currentPassword, result.rows[0].password_hash);
+    if (!passwordMatch) {
+      return res.status(401).json({
+        success: false,
+        error: 'Current password is incorrect'
+      });
+    }
+
+    // Hash new password
+    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+
+    // Update password
+    await pool.query(
+      'UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [newPasswordHash, req.user.id]
+    );
+
+    res.json({
+      success: true,
+      message: 'Password changed successfully'
+    });
+  } catch (error) {
+    console.error('Error changing password:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to change password'
+    });
+  }
 });
 
 // ESP32 Device Registration
@@ -870,6 +1138,82 @@ const initBarcodesTable = async () => {
     console.error('Error creating barcodes table:', error);
     throw error;
   }
+};
+
+// Create users table if it doesn't exist
+const initUsersTable = async () => {
+  try {
+    const query = `
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        name TEXT,
+        role TEXT NOT NULL DEFAULT 'expo_user',
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_login TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
+    
+    await pool.query(query);
+    console.log('✅ Users table created/verified');
+    
+    // Create default admin user if no users exist
+    const userCount = await pool.query('SELECT COUNT(*) FROM users');
+    if (parseInt(userCount.rows[0].count) === 0) {
+      const defaultPassword = await bcrypt.hash('admin123', 10);
+      await pool.query(
+        `INSERT INTO users (email, password_hash, name, role) 
+         VALUES ($1, $2, $3, $4) 
+         ON CONFLICT (email) DO NOTHING`,
+        ['admin@robridge.com', defaultPassword, 'Admin User', 'admin']
+      );
+      
+      const expoPassword = await bcrypt.hash('expo123', 10);
+      await pool.query(
+        `INSERT INTO users (email, password_hash, name, role) 
+         VALUES ($1, $2, $3, $4) 
+         ON CONFLICT (email) DO NOTHING`,
+        ['user@expo.com', expoPassword, 'Expo User', 'expo_user']
+      );
+      
+      const fullAccessPassword = await bcrypt.hash('full123', 10);
+      await pool.query(
+        `INSERT INTO users (email, password_hash, name, role) 
+         VALUES ($1, $2, $3, $4) 
+         ON CONFLICT (email) DO NOTHING`,
+        ['user@robridge.com', fullAccessPassword, 'Full Access User', 'full_access']
+      );
+      
+      console.log('✅ Default users created');
+      console.log('   Admin: admin@robridge.com / admin123');
+      console.log('   Expo: user@expo.com / expo123');
+      console.log('   Full Access: user@robridge.com / full123');
+    }
+  } catch (error) {
+    console.error('Error creating users table:', error);
+    throw error;
+  }
+};
+
+// JWT Authentication Middleware
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+  if (!token) {
+    return res.status(401).json({ success: false, error: 'Access token required' });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ success: false, error: 'Invalid or expired token' });
+    }
+    req.user = user;
+    next();
+  });
 };
 
 // Create saved_scans table if it doesn't exist
@@ -1671,6 +2015,7 @@ const startServer = async () => {
     console.log('✅ Database connection initialized');
     
     // Initialize tables
+    await initUsersTable();
     await initBarcodesTable();
     await initSavedScansTable();
   } catch (error) {
@@ -1690,7 +2035,7 @@ const startServer = async () => {
     console.log(`🔌 WebSocket server active on port ${PORT}`);
     console.log(`🗄️  Database: PostgreSQL (${process.env.DATABASE_URL ? 'Connected' : 'Not configured'})`);
     if (NODE_ENV === 'production') {
-      console.log(`🌐 Production URL: https://robridge-express.onrender.com`);
+      console.log(`🌐 Production URL: https://robridgeexpress.onrender.com`);
     } else {
       console.log(`🌐 Local URL: http://localhost:${PORT}`);
     }

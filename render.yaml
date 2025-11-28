@@ -12,9 +12,9 @@ services:
         destination: /index.html
     envVars:
       - key: REACT_APP_API_URL
-        value: https://robridge-express.onrender.com
+        value: https://robridgeexpress.onrender.com
       - key: REACT_APP_AI_SERVER_URL
-        value: https://robridge-ai.onrender.com
+        value: https://robridgeaiserver.onrender.com
 
   # Express.js Backend Server (API Only)
   - type: web
@@ -27,9 +27,9 @@ services:
       - key: NODE_ENV
         value: production
       - key: AI_SERVER_URL
-        value: https://robridge-ai.onrender.com
+        value: https://robridgeaiserver.onrender.com
       - key: DATABASE_URL
-        value: postgresql://barcodesdb_user:p24RV0pw4Al5fEcgzAkjNE0epHZYfBEs@dpg-d3vo8rur433s73arsjk0-a/barcodesdb
+        value: postgresql://robridgedb_user:8NcVhAHtrzMemZsRjcOVxztpxoxySsi5@dpg-d4kn2nk9c44c73f2hhdg-a.oregon-postgres.render.com/robridgedb
       - key: CORS_ORIGIN
         value: https://robridgelabs.com
 
