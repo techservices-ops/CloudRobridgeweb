@@ -12,9 +12,8 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: ["https://robridgelabs.com", "https://www.robridgelabs.com", "http://localhost:3000", "http://localhost:8080"],
-    methods: ["GET", "POST"],
-    credentials: true
+    origin: "*",
+    methods: ["GET", "POST"]
   }
 });
 
@@ -24,7 +23,16 @@ const AI_SERVER_URL = process.env.AI_SERVER_URL || 'https://robridgeaiserver.onr
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const JWT_SECRET = process.env.JWT_SECRET || 'robridge-secret-key-change-in-production-2024';
 
-console.log('Server Configuration:');
+// PostgreSQL database connection pool
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  connectionTimeoutMillis: 10000,
+  idleTimeoutMillis: 30000,
+  max: 20
+});
+
+console.log('🚀 Server Configuration:');
 console.log(`   PORT: ${PORT}`);
 console.log(`   AI_SERVER_URL: ${AI_SERVER_URL}`);
 console.log(`   NODE_ENV: ${NODE_ENV}`);
@@ -34,21 +42,9 @@ const redirectApp = express();
 const REDIRECT_PORT = 3003;
 
 // Middleware
-app.use(cors({
-  origin: ["https://robridgelabs.com", "https://www.robridgelabs.com", "http://localhost:3000", "http://localhost:8080"],
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
+app.use(cors());
 app.use(express.json());
-
-// Serve static files from React build directory for /bvs subdirectory
-app.use('/bvs', express.static(path.join(__dirname, 'build')));
-
-// Handle React routing for /bvs subdirectory - return index.html for all non-API routes
-app.get('/bvs/*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'build', 'index.html'));
-});
+// No static file serving - backend API only
 
 // Store the Python process
 let pythonProcess = null;
@@ -57,16 +53,7 @@ let pythonProcess = null;
 let esp32Devices = new Map();
 let lastBarcodeScan = null;
 
-// Database connection
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-  connectionTimeoutMillis: 10000,
-  idleTimeoutMillis: 30000,
-  max: 20
-});
-
-// Initialize database connection
+// Initialize database connection (PostgreSQL)
 const initDatabase = async () => {
   try {
     console.log('🔍 Database connection details:');
@@ -87,7 +74,7 @@ const initDatabase = async () => {
   }
 };
 
-// Function to save barcode scan to database
+// Function to save barcode scan to database (PostgreSQL)
 const saveBarcodeScan = async (scanData) => {
   try {
     const {
@@ -133,7 +120,7 @@ const saveBarcodeScan = async (scanData) => {
   }
 };
 
-// Function to get all scanned barcodes
+// Function to get all scanned barcodes (PostgreSQL)
 const getAllScannedBarcodes = async (limit = 100, offset = 0) => {
   try {
     const query = `
@@ -159,174 +146,92 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// System status endpoint for Dashboard
-app.get('/api/system/status', (req, res) => {
-  try {
-    const devices = Array.from(esp32Devices.values());
-    const connectedDevices = devices.filter(device => device.status === 'connected');
-    const totalScans = devices.reduce((sum, device) => sum + (device.totalScans || 0), 0);
-    
-    const systemStatus = {
-      server: 'online',
-      database: 'connected',
-      devices: {
-        total: devices.length,
-        connected: connectedDevices.length,
-        disconnected: devices.length - connectedDevices.length
-      },
-      scans: {
-        total: totalScans,
-        today: totalScans // Simplified - could be enhanced with date filtering
-      },
-      uptime: process.uptime(),
-      timestamp: new Date().toISOString()
-    };
-    
-    res.json({
-      success: true,
-      status: systemStatus
-    });
-  } catch (error) {
-    console.error('Error getting system status:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get system status'
-    });
-  }
-});
-
 // Simple health endpoint for convenience
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// ======================
-// AUTHENTICATION MIDDLEWARE
-// ======================
-
-// JWT Authentication Middleware
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
-
-  if (!token) {
-    return res.status(401).json({ success: false, error: 'Access token required' });
-  }
-
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({ success: false, error: 'Invalid or expired token' });
-    }
-    req.user = user;
-    next();
-  });
-};
-
-// ======================
-// AUTHENTICATION ENDPOINTS
-// ======================
-
-// User Registration
-app.post('/api/auth/register', async (req, res) => {
-  try {
-    const { email, password, name, role = 'expo_user' } = req.body;
-
-    // Validation
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        error: 'Email and password are required'
-      });
-    }
-
-    if (password.length < 6) {
-      return res.status(400).json({
-        success: false,
-        error: 'Password must be at least 6 characters long'
-      });
-    }
-
-    // Check if user already exists
-    const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [email.toLowerCase()]);
-    if (existingUser.rows.length > 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'User with this email already exists'
-      });
-    }
-
-    // Hash password
-    const passwordHash = await bcrypt.hash(password, 10);
-
-    // Insert user
-    const result = await pool.query(
-      `INSERT INTO users (email, password_hash, name, role) 
-       VALUES ($1, $2, $3, $4) 
-       RETURNING id, email, name, role, created_at`,
-      [email.toLowerCase(), passwordHash, name || email.split('@')[0], role]
-    );
-
-    const user = result.rows[0];
-
-    // Generate JWT token
-    const token = jwt.sign(
-      { 
-        id: user.id, 
-        email: user.email, 
-        role: user.role 
-      },
-      JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    res.json({
-      success: true,
-      message: 'User registered successfully',
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role
-      }
-    });
-  } catch (error) {
-    console.error('Error registering user:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to register user'
-    });
-  }
-});
-
-// User Login
+// Authentication endpoints
 app.post('/api/auth/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
-
-    // Validation
-    if (!email || !password) {
+    // Support both 'username' and 'email' fields for backward compatibility with mobile app
+    const { username, email, password } = req.body;
+    
+    // Use email if provided, otherwise use username (convert username to email format if needed)
+    let loginEmail = email || username;
+    
+    // If username is provided without @, try to find user by username or convert to email
+    // For backward compatibility: 'admin' -> 'admin@robridge.com'
+    if (username && !username.includes('@')) {
+      // Try to find user with this username, or use default email format
+      if (username === 'admin') {
+        loginEmail = 'admin@robridge.com';
+      } else {
+        loginEmail = `${username}@robridge.com`;
+      }
+    }
+    
+    // Validate required fields
+    if (!loginEmail || !password) {
       return res.status(400).json({
         success: false,
         error: 'Email and password are required'
       });
     }
-
-    // Find user
+    
+    // Normalize email to lowercase
+    loginEmail = loginEmail.toLowerCase().trim();
+    
+    // Check if PostgreSQL database is available
+    if (!pool) {
+      // Fallback to simple authentication if PostgreSQL not available (SQLite/local)
+      const isAdmin = (username === 'admin' || email === 'admin' || loginEmail === 'admin@robridge.com') && password === 'admin123';
+      if (isAdmin) {
+        // Generate simple token if jwt available, otherwise use basic token
+        let token;
+        if (jwt) {
+          token = jwt.sign(
+            { id: 'admin', email: 'admin@robridge.com', role: 'admin' },
+            JWT_SECRET,
+            { expiresIn: '7d' }
+          );
+        } else {
+          token = `token_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        }
+        return res.json({
+          success: true,
+          message: 'Login successful',
+          token: token,
+          user: {
+            id: 'admin',
+            email: 'admin@robridge.com',
+            name: 'Admin User',
+            role: 'admin'
+          }
+        });
+      } else {
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid email or password'
+        });
+      }
+    }
+    
+    // Find user in database
     const result = await pool.query(
       'SELECT id, email, password_hash, name, role, is_active FROM users WHERE email = $1',
-      [email.toLowerCase()]
+      [loginEmail]
     );
-
+    
     if (result.rows.length === 0) {
       return res.status(401).json({
         success: false,
         error: 'Invalid email or password'
       });
     }
-
+    
     const user = result.rows[0];
-
+    
     // Check if user is active
     if (!user.is_active) {
       return res.status(403).json({
@@ -334,7 +239,7 @@ app.post('/api/auth/login', async (req, res) => {
         error: 'Account is deactivated'
       });
     }
-
+    
     // Verify password
     const passwordMatch = await bcrypt.compare(password, user.password_hash);
     if (!passwordMatch) {
@@ -343,13 +248,13 @@ app.post('/api/auth/login', async (req, res) => {
         error: 'Invalid email or password'
       });
     }
-
+    
     // Update last login
     await pool.query(
       'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1',
       [user.id]
     );
-
+    
     // Generate JWT token
     const token = jwt.sign(
       { 
@@ -360,11 +265,11 @@ app.post('/api/auth/login', async (req, res) => {
       JWT_SECRET,
       { expiresIn: '7d' }
     );
-
+    
     res.json({
       success: true,
       message: 'Login successful',
-      token,
+      token: token,
       user: {
         id: user.id,
         email: user.email,
@@ -373,116 +278,117 @@ app.post('/api/auth/login', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error during login:', error);
+    console.error('Login error:', error);
+    console.error('Login error stack:', error.stack);
     res.status(500).json({
       success: false,
-      error: 'Login failed. Please try again.'
+      error: 'Login failed. Please try again.',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
 
-// Verify Token
-app.get('/api/auth/verify', authenticateToken, async (req, res) => {
+// Dashboard stats endpoint
+app.get('/api/dashboard/stats', (req, res) => {
   try {
-    // Get fresh user data from database
-    const result = await pool.query(
-      'SELECT id, email, name, role, is_active FROM users WHERE id = $1',
-      [req.user.id]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'User not found'
-      });
-    }
-
-    const user = result.rows[0];
-
-    if (!user.is_active) {
-      return res.status(403).json({
-        success: false,
-        error: 'Account is deactivated'
-      });
-    }
-
+    const devices = Array.from(esp32Devices.values());
+    const connectedDevices = devices.filter(d => d.status === 'connected').length;
+    
     res.json({
       success: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role
+      data: {
+        users: 1, // Single admin user
+        sessions: 1,
+        barcodes: 0, // You can get this from database
+        robot_status: connectedDevices > 0 ? 'connected' : 'offline',
+        recent_activity: [
+          {
+            id: 1,
+            log_level: 'INFO',
+            message: 'System started',
+            module: 'system',
+            timestamp: new Date().toISOString()
+          }
+        ]
       }
     });
   } catch (error) {
-    console.error('Error verifying token:', error);
+    console.error('Dashboard stats error:', error);
     res.status(500).json({
       success: false,
-      error: 'Token verification failed'
+      error: 'Failed to get dashboard stats'
     });
   }
 });
 
-// Change Password
-app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
+// Barcode endpoints
+app.get('/api/barcode/list', (req, res) => {
   try {
-    const { currentPassword, newPassword } = req.body;
-
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({
-        success: false,
-        error: 'Current password and new password are required'
+    getAllScannedBarcodes(100, 0).then(barcodes => {
+      res.json({
+        success: true,
+        data: barcodes
       });
-    }
-
-    if (newPassword.length < 6) {
-      return res.status(400).json({
+    }).catch(error => {
+      console.error('Error getting barcodes:', error);
+      res.status(500).json({
         success: false,
-        error: 'New password must be at least 6 characters long'
+        error: 'Failed to get barcodes'
       });
-    }
-
-    // Get user's current password hash
-    const result = await pool.query(
-      'SELECT password_hash FROM users WHERE id = $1',
-      [req.user.id]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'User not found'
-      });
-    }
-
-    // Verify current password
-    const passwordMatch = await bcrypt.compare(currentPassword, result.rows[0].password_hash);
-    if (!passwordMatch) {
-      return res.status(401).json({
-        success: false,
-        error: 'Current password is incorrect'
-      });
-    }
-
-    // Hash new password
-    const newPasswordHash = await bcrypt.hash(newPassword, 10);
-
-    // Update password
-    await pool.query(
-      'UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-      [newPasswordHash, req.user.id]
-    );
-
-    res.json({
-      success: true,
-      message: 'Password changed successfully'
     });
   } catch (error) {
-    console.error('Error changing password:', error);
+    console.error('Barcode list error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to change password'
+      error: 'Failed to get barcode list'
+    });
+  }
+});
+
+app.post('/api/barcode/save_scanned', (req, res) => {
+  try {
+    const { data, type, source, product_name, product_id, price, location, category } = req.body;
+    
+    const scanData = {
+      barcodeData: data,
+      deviceName: 'mobile-app',
+      deviceId: 'mobile-app',
+      scanType: type || 'mobile_scan',
+      source: source || 'mobile',
+      productName: product_name || 'Unknown Product',
+      productId: product_id || data,
+      price: price || 0,
+      locationX: 0,
+      locationY: 0,
+      locationZ: 0,
+      category: category || 'Unknown',
+      metadata: JSON.stringify({
+        product_name: product_name,
+        product_id: product_id,
+        price: price,
+        location: location,
+        category: category
+      })
+    };
+    
+    saveBarcodeScan(scanData).then(result => {
+      res.json({
+        success: true,
+        message: 'Barcode saved successfully',
+        barcode_id: result.barcodeId
+      });
+    }).catch(error => {
+      console.error('Error saving barcode:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to save barcode'
+      });
+    });
+  } catch (error) {
+    console.error('Save barcode error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to save barcode'
     });
   }
 });
@@ -637,97 +543,75 @@ app.post('/api/esp32/scan/:deviceId', async (req, res) => {
     
     console.log(`ESP32 barcode scan received from ${device.deviceName}: ${barcodeData}`);
     
-    // Check if device name contains "AI" for conditional AI analysis
-    const hasAI = device.deviceName && typeof device.deviceName === 'string' && device.deviceName.toUpperCase().includes('AI');
-    console.log(`🔍 Device "${device.deviceName}" has AI capability: ${hasAI}`);
-    
     // Check if ESP32 already provided product data
     const { productName, productType, productDetails, productCategory, source } = req.body;
     let aiAnalysis = null;
     
-    if (hasAI) {
-      // Device has AI capability - process AI analysis
-      if (source === 'ai_analysis' && productName) {
-        // ESP32 already did AI analysis, use that data
-        console.log('✅ Using ESP32 AI analysis data');
-        aiAnalysis = {
-          success: true,
-          title: productName,
-          category: productCategory || productType || 'Scanned Product',
-          description: productDetails || `Product: ${productName}`,
-          description_short: `${productName} - ${productType || 'Product'}`,
-          country: 'Unknown',
-          barcode: barcodeData,
-          deviceId: deviceId,
-          source: 'esp32_ai'
-        };
-        console.log('📊 ESP32 AI Analysis:', JSON.stringify(aiAnalysis, null, 2));
-      } else {
-        // Try AI server for analysis
-        try {
-          console.log(`🤖 Forwarding to AI server at ${AI_SERVER_URL} for barcode: ${barcodeData}`);
-          
-          const aiResponse = await fetch(`${AI_SERVER_URL}/api/esp32/scan`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              barcodeData: barcodeData,
-              deviceId: deviceId,
-              deviceName: device.deviceName,
-              scanType: scanType || 'ESP32_SCAN',
-              timestamp: timestamp || Date.now()
-            }),
-            signal: AbortSignal.timeout(15000) // 15 second timeout for Render.com cold starts
-          });
-          
-          if (aiResponse.ok) {
-            aiAnalysis = await aiResponse.json();
-            console.log('✅ AI Analysis completed successfully!');
-            console.log('AI Analysis:', JSON.stringify(aiAnalysis, null, 2));
-          } else {
-            const errorText = await aiResponse.text();
-            console.log(`⚠️ AI server returned status ${aiResponse.status}, no AI analysis available`);
-            console.log(`⚠️ AI server error response: ${errorText}`);
-          }
-        } catch (aiError) {
-          console.error('❌ AI server communication error:', aiError.message);
-          console.error('❌ Full error details:', aiError);
-          console.log(`ℹ️  Make sure AI server is running at: ${AI_SERVER_URL}`);
-        }
-        
-        // Provide fallback if no AI analysis available
-        if (!aiAnalysis) {
-          console.log('📦 Using fallback analysis (AI server not available)');
-          aiAnalysis = {
-            success: true,
-            title: `Product ${barcodeData.substring(0, 20)}`,
-            category: 'Scanned Product',
-            description: 'Product scanned successfully. Start AI server on port 8000 for detailed analysis.',
-            description_short: `Scanned: ${barcodeData.substring(0, 30)}`,
-            country: 'Unknown',
-            barcode: barcodeData,
-            deviceId: deviceId,
-            fallback: true
-          };
-        }
-      }
-    } else {
-      // Device does NOT have AI capability - provide basic scan data only
-      console.log('📋 Device does not support AI analysis - providing basic scan data only');
+    if (source === 'ai_analysis' && productName) {
+      // ESP32 already did AI analysis, use that data
+      console.log('✅ Using ESP32 AI analysis data');
       aiAnalysis = {
         success: true,
-        title: `Basic Scan: ${barcodeData.substring(0, 20)}`,
-        category: 'Basic Scanner',
-        description: 'Basic scan without AI analysis. This device does not support AI features.',
-        description_short: `Basic scan: ${barcodeData.substring(0, 30)}`,
+        title: productName,
+        category: productCategory || productType || 'Scanned Product',
+        description: productDetails || `Product: ${productName}`,
+        description_short: `${productName} - ${productType || 'Product'}`,
         country: 'Unknown',
         barcode: barcodeData,
         deviceId: deviceId,
-        source: 'basic_scan',
-        noAI: true
+        source: 'esp32_ai'
       };
+      console.log('📊 ESP32 AI Analysis:', JSON.stringify(aiAnalysis, null, 2));
+    } else {
+      // Try AI server for analysis
+      try {
+        console.log(`🤖 Forwarding to AI server at ${AI_SERVER_URL} for barcode: ${barcodeData}`);
+        
+        const aiResponse = await fetch(`${AI_SERVER_URL}/api/esp32/scan`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            barcodeData: barcodeData,
+            deviceId: deviceId,
+            deviceName: device.deviceName,
+            scanType: scanType || 'ESP32_SCAN',
+            timestamp: timestamp || Date.now()
+          }),
+          signal: AbortSignal.timeout(15000) // 15 second timeout for Render.com cold starts
+        });
+        
+        if (aiResponse.ok) {
+          aiAnalysis = await aiResponse.json();
+          console.log('✅ AI Analysis completed successfully!');
+          console.log('AI Analysis:', JSON.stringify(aiAnalysis, null, 2));
+        } else {
+          const errorText = await aiResponse.text();
+          console.log(`⚠️ AI server returned status ${aiResponse.status}, no AI analysis available`);
+          console.log(`⚠️ AI server error response: ${errorText}`);
+        }
+      } catch (aiError) {
+        console.error('❌ AI server communication error:', aiError.message);
+        console.error('❌ Full error details:', aiError);
+        console.log(`ℹ️  Make sure AI server is running at: ${AI_SERVER_URL}`);
+      }
+      
+      // Provide fallback if no AI analysis available
+      if (!aiAnalysis) {
+        console.log('📦 Using fallback analysis (AI server not available)');
+        aiAnalysis = {
+          success: true,
+          title: `Product ${barcodeData.substring(0, 20)}`,
+          category: 'Scanned Product',
+          description: 'Product scanned successfully. Start AI server on port 8000 for detailed analysis.',
+          description_short: `Scanned: ${barcodeData.substring(0, 30)}`,
+          country: 'Unknown',
+          barcode: barcodeData,
+          deviceId: deviceId,
+          fallback: true
+        };
+      }
     }
     
     // Create scan record with AI analysis
@@ -885,7 +769,7 @@ app.get('/api/barcodes/scanned', async (req, res) => {
   try {
     const { limit = 100, offset = 0, source } = req.query;
     
-    let query = `
+    let sql = `
       SELECT 
         id, barcode_id, barcode_data, barcode_type, source, 
         product_name, product_id, price, location_x, location_y, location_z,
@@ -894,25 +778,31 @@ app.get('/api/barcodes/scanned', async (req, res) => {
     `;
     
     const params = [];
-    let paramIndex = 1;
     
     if (source) {
-      query += ' WHERE source = $' + paramIndex;
+      sql += ' WHERE source = ?';
       params.push(source);
-      paramIndex++;
     }
     
-    query += ' ORDER BY created_at DESC LIMIT $' + paramIndex + ' OFFSET $' + (paramIndex + 1);
+    sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
     params.push(parseInt(limit), parseInt(offset));
     
-    const result = await pool.query(query, params);
-    
-    res.json({ 
-      success: true, 
-      barcodes: result.rows,
-      total: result.rows.length,
-      limit: parseInt(limit),
-      offset: parseInt(offset)
+    db.all(sql, params, (err, rows) => {
+      if (err) {
+        console.error('Error fetching scanned barcodes:', err);
+        res.status(500).json({ 
+          success: false, 
+          error: 'Failed to fetch scanned barcodes' 
+        });
+      } else {
+        res.json({ 
+          success: true, 
+          barcodes: rows,
+          total: rows.length,
+          limit: parseInt(limit),
+          offset: parseInt(offset)
+        });
+      }
     });
   } catch (error) {
     console.error('Error getting scanned barcodes:', error);
@@ -930,22 +820,27 @@ app.delete('/api/barcodes/:id', async (req, res) => {
     
     console.log(`🗑️ Deleting barcode with ID: ${id}`);
     
-    const result = await pool.query('DELETE FROM barcodes WHERE id = $1', [id]);
-    
-    if (result.rowCount === 0) {
-      console.log('⚠️ No barcode found with ID:', id);
-      res.status(404).json({ 
-        success: false, 
-        error: 'Barcode not found' 
-      });
-    } else {
-      console.log(`✅ Barcode deleted successfully. Changes: ${result.rowCount}`);
-      res.json({ 
-        success: true, 
-        message: 'Barcode deleted successfully',
-        changes: result.rowCount
-      });
-    }
+    db.run('DELETE FROM barcodes WHERE id = ?', [id], function(err) {
+      if (err) {
+        console.error('❌ Error deleting barcode:', err);
+        res.status(500).json({ 
+          success: false, 
+          error: 'Failed to delete barcode' 
+        });
+      } else if (this.changes === 0) {
+        console.log('⚠️ No barcode found with ID:', id);
+        res.status(404).json({ 
+          success: false, 
+          error: 'Barcode not found' 
+        });
+      } else {
+        console.log('✅ Barcode deleted successfully');
+        res.json({ 
+          success: true, 
+          message: 'Barcode deleted successfully' 
+        });
+      }
+    });
   } catch (error) {
     console.error('❌ Error deleting barcode:', error);
     res.status(500).json({ 
@@ -956,7 +851,7 @@ app.delete('/api/barcodes/:id', async (req, res) => {
 });
 
 // ESP32 Database Lookup Endpoint
-app.get('/api/barcodes/lookup/:barcode', async (req, res) => {
+app.get('/api/barcodes/lookup/:barcode', (req, res) => {
   try {
     const { barcode } = req.params;
     
@@ -965,44 +860,49 @@ app.get('/api/barcodes/lookup/:barcode', async (req, res) => {
         barcode_data, product_name, category, price, location_x, location_y, location_z,
         metadata, created_at
       FROM barcodes 
-      WHERE barcode_data = $1
+      WHERE barcode_data = ?
       ORDER BY created_at DESC 
       LIMIT 1
     `;
     
-    const result = await pool.query(sql, [barcode]);
-    const row = result.rows[0];
-    
-    if (row) {
-      // Parse metadata for additional product info
-      let metadata = {};
-      try {
-        metadata = JSON.parse(row.metadata || '{}');
-      } catch (e) {
-        metadata = {};
-      }
-      
-      res.json({ 
-        success: true, 
-        product: {
-          barcode: row.barcode_data,
-          name: row.product_name || 'Unknown Product',
-          type: row.category || 'Unknown',
-          details: metadata.productDetails || 'No details available',
-          price: row.price ? `$${row.price}` : 'Price not available',
-          category: row.category || 'Unknown',
-          location: `X:${row.location_x}, Y:${row.location_y}, Z:${row.location_z}`,
-          foundInDatabase: true,
-          lastScanned: row.created_at
+    db.get(sql, [barcode], (err, row) => {
+      if (err) {
+        console.error('Error looking up barcode:', err);
+        res.status(500).json({ 
+          success: false, 
+          error: 'Database lookup failed' 
+        });
+      } else if (row) {
+        // Parse metadata for additional product info
+        let metadata = {};
+        try {
+          metadata = JSON.parse(row.metadata || '{}');
+        } catch (e) {
+          metadata = {};
         }
-      });
-    } else {
-      res.json({ 
-        success: false, 
-        message: 'Barcode not found in database',
-        product: null
-      });
-    }
+        
+        res.json({ 
+          success: true, 
+          product: {
+            barcode: row.barcode_data,
+            name: row.product_name || 'Unknown Product',
+            type: row.category || 'Unknown',
+            details: metadata.productDetails || 'No details available',
+            price: row.price ? `$${row.price}` : 'Price not available',
+            category: row.category || 'Unknown',
+            location: `X:${row.location_x}, Y:${row.location_y}, Z:${row.location_z}`,
+            foundInDatabase: true,
+            lastScanned: row.created_at
+          }
+        });
+      } else {
+        res.json({ 
+          success: false, 
+          message: 'Barcode not found in database',
+          product: null
+        });
+      }
+    });
   } catch (error) {
     console.error('Error in barcode lookup:', error);
     res.status(500).json({ 
@@ -1132,6 +1032,7 @@ async function callAIForProductAnalysis(barcode) {
 }
 
 // Create barcodes table if it doesn't exist
+// Create barcodes table if it doesn't exist (PostgreSQL)
 const initBarcodesTable = async () => {
   try {
     const query = `
@@ -1162,70 +1063,12 @@ const initBarcodesTable = async () => {
   }
 };
 
-// Create users table if it doesn't exist
-const initUsersTable = async () => {
-  try {
-    const query = `
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        email TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        name TEXT,
-        role TEXT NOT NULL DEFAULT 'expo_user',
-        is_active BOOLEAN DEFAULT true,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        last_login TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `;
-    
-    await pool.query(query);
-    console.log('✅ Users table created/verified');
-    
-    // Create default admin user if no users exist
-    const userCount = await pool.query('SELECT COUNT(*) FROM users');
-    if (parseInt(userCount.rows[0].count) === 0) {
-      const defaultPassword = await bcrypt.hash('admin123', 10);
-      await pool.query(
-        `INSERT INTO users (email, password_hash, name, role) 
-         VALUES ($1, $2, $3, $4) 
-         ON CONFLICT (email) DO NOTHING`,
-        ['admin@robridge.com', defaultPassword, 'Admin User', 'admin']
-      );
-      
-      const expoPassword = await bcrypt.hash('expo123', 10);
-      await pool.query(
-        `INSERT INTO users (email, password_hash, name, role) 
-         VALUES ($1, $2, $3, $4) 
-         ON CONFLICT (email) DO NOTHING`,
-        ['user@expo.com', expoPassword, 'Expo User', 'expo_user']
-      );
-      
-      const fullAccessPassword = await bcrypt.hash('full123', 10);
-      await pool.query(
-        `INSERT INTO users (email, password_hash, name, role) 
-         VALUES ($1, $2, $3, $4) 
-         ON CONFLICT (email) DO NOTHING`,
-        ['user@robridge.com', fullAccessPassword, 'Full Access User', 'full_access']
-      );
-      
-      console.log('✅ Default users created');
-      console.log('   Admin: admin@robridge.com / admin123');
-      console.log('   Expo: user@expo.com / expo123');
-      console.log('   Full Access: user@robridge.com / full123');
-    }
-  } catch (error) {
-    console.error('Error creating users table:', error);
-    throw error;
-  }
-};
-
 // Create saved_scans table if it doesn't exist
-const initSavedScansTable = async () => {
-  try {
-    const query = `
+const initSavedScansTable = () => {
+  return new Promise((resolve, reject) => {
+    const sql = `
       CREATE TABLE IF NOT EXISTS saved_scans (
-        id SERIAL PRIMARY KEY,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         barcode_data TEXT NOT NULL,
         barcode_type TEXT NOT NULL,
         source TEXT NOT NULL,
@@ -1238,39 +1081,37 @@ const initSavedScansTable = async () => {
       )
     `;
     
-    await pool.query(query);
-    console.log('✅ saved_scans table ready');
-    
-    // Verify the table was created
-    const verifyQuery = "SELECT table_name FROM information_schema.tables WHERE table_name = 'saved_scans'";
-    const result = await pool.query(verifyQuery);
-    
-    if (result.rows.length > 0) {
-      console.log('✅ saved_scans table verified');
-    } else {
-      throw new Error('Table creation failed');
-    }
-  } catch (error) {
-    console.error('❌ Error creating saved_scans table:', error);
-    throw error;
-  }
+    db.run(sql, (err) => {
+      if (err) {
+        console.error('❌ Error creating saved_scans table:', err);
+        reject(err);
+      } else {
+        console.log('✅ saved_scans table ready');
+        
+        // Verify the table was created
+        db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='saved_scans'", (err, row) => {
+          if (err) {
+            console.error('❌ Error verifying saved_scans table:', err);
+            reject(err);
+          } else if (row) {
+            console.log('✅ saved_scans table verified');
+            resolve();
+          } else {
+            console.error('❌ saved_scans table was not created');
+            reject(new Error('Table creation failed'));
+          }
+        });
+      }
+    });
+  });
 };
 
 // Save a scan to saved_scans table
-app.post('/api/save-scan', async (req, res) => {
+app.post('/api/save-scan', (req, res) => {
   try {
     const { barcode_data, barcode_type, source, product_name, category, price, description, metadata } = req.body;
     
-    console.log('🔍 Save scan request received:', {
-      barcode_data,
-      barcode_type,
-      source,
-      product_name,
-      category
-    });
-    
     if (!barcode_data) {
-      console.log('❌ No barcode data provided');
       return res.status(400).json({
         success: false,
         error: 'Barcode data is required'
@@ -1279,9 +1120,7 @@ app.post('/api/save-scan', async (req, res) => {
 
     // Only allow ESP32 source scans to be saved
     const sourceUpper = (source || '').toUpperCase();
-    console.log('🔍 Source check:', { source, sourceUpper, expected: 'ESP32' });
     if (sourceUpper !== 'ESP32') {
-      console.log('❌ Invalid source:', source);
       return res.status(400).json({
         success: false,
         error: 'Only ESP32 source scans can be saved.'
@@ -1291,14 +1130,22 @@ app.post('/api/save-scan', async (req, res) => {
     // First, check if this barcode was already saved recently (within last 5 minutes)
     const checkDuplicateSQL = `
       SELECT id, saved_at FROM saved_scans 
-      WHERE barcode_data = $1 
+      WHERE barcode_data = ? 
       ORDER BY saved_at DESC 
       LIMIT 1
     `;
 
-    try {
-      const duplicateResult = await pool.query(checkDuplicateSQL, [barcode_data]);
-      const existingScan = duplicateResult.rows[0];
+    db.get(checkDuplicateSQL, [barcode_data], (err, existingScan) => {
+      if (err) {
+        console.error('❌ Error checking for duplicates:', err);
+        console.error('   SQL:', checkDuplicateSQL);
+        console.error('   Barcode data:', barcode_data);
+        console.error('   Error message:', err.message);
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to check for duplicates: ' + err.message
+        });
+      }
 
       // If scan exists and was saved within last 5 minutes, prevent duplicate
       if (existingScan) {
@@ -1320,22 +1167,10 @@ app.post('/api/save-scan', async (req, res) => {
       // Save the scan if no recent duplicate found
       const sql = `
         INSERT INTO saved_scans (barcode_data, barcode_type, source, product_name, category, price, description, metadata)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        RETURNING id
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
-      console.log('🔍 Attempting to save scan to database:', {
-        barcode_data,
-        barcode_type,
-        source,
-        product_name,
-        category,
-        price,
-        description,
-        metadata: JSON.stringify(metadata)
-      });
-
-      const result = await pool.query(sql, [
+      db.run(sql, [
         barcode_data, 
         barcode_type, 
         source, 
@@ -1344,28 +1179,23 @@ app.post('/api/save-scan', async (req, res) => {
         price, 
         description,
         JSON.stringify(metadata)
-      ]);
-
-      console.log(`✅ Scan saved to saved_scans table. ID: ${result.rows[0].id}`);
-      res.json({
-        success: true,
-        message: 'Scan saved successfully',
-        savedId: result.rows[0].id
+      ], function(err) {
+        if (err) {
+          console.error('Error saving scan:', err);
+          res.status(500).json({
+            success: false,
+            error: 'Failed to save scan'
+          });
+        } else {
+          console.log(`✅ Scan saved to saved_scans table. ID: ${this.lastID}`);
+          res.json({
+            success: true,
+            message: 'Scan saved successfully',
+            savedId: this.lastID
+          });
+        }
       });
-
-    } catch (dbError) {
-      console.error('❌ Error saving scan to database:', dbError);
-      console.error('❌ SQL Error details:', {
-        message: dbError.message,
-        code: dbError.code,
-        sql: sql
-      });
-      res.status(500).json({
-        success: false,
-        error: 'Failed to save scan: ' + dbError.message
-      });
-    }
-
+    });
   } catch (error) {
     console.error('Error saving scan:', error);
     res.status(500).json({
@@ -1376,8 +1206,17 @@ app.post('/api/save-scan', async (req, res) => {
 });
 
 // Get saved scans endpoint
-app.get('/api/saved-scans', async (req, res) => {
+app.get('/api/saved-scans', (req, res) => {
   try {
+    // Check if database is initialized
+    if (!db) {
+      console.error('Database not initialized');
+      return res.status(503).json({ 
+        success: false, 
+        error: 'Database not available. Please try again later.' 
+      });
+    }
+
     const sql = `
       SELECT 
         id, barcode_data, barcode_type, source, 
@@ -1386,52 +1225,97 @@ app.get('/api/saved-scans', async (req, res) => {
       ORDER BY saved_at DESC
     `;
     
-    const result = await pool.query(sql);
-    const rows = result.rows;
-    
-    // Format rows to match expected structure
-    const formattedRows = rows.map(row => ({
-      ...row,
-      created_at: row.saved_at,
-      scanned_at: row.saved_at
-    }));
-    
-    res.json({ 
-      success: true, 
-      savedScans: formattedRows
+    db.all(sql, [], (err, rows) => {
+      if (err) {
+        console.error('Error fetching saved scans:', err);
+        console.error('SQL Error details:', err.message);
+        
+        // Check if table doesn't exist
+        if (err.message && err.message.includes('no such table')) {
+          console.log('saved_scans table does not exist, initializing...');
+          // Try to initialize the table
+          initSavedScansTable()
+            .then(() => {
+              // Retry the query
+              db.all(sql, [], (retryErr, retryRows) => {
+                if (retryErr) {
+                  console.error('Error after table initialization:', retryErr);
+                  res.status(500).json({ 
+                    success: false, 
+                    error: 'Failed to fetch saved scans after table initialization' 
+                  });
+                } else {
+                  const formattedRows = (retryRows || []).map(row => ({
+                    ...row,
+                    created_at: row.saved_at,
+                    scanned_at: row.saved_at
+                  }));
+                  res.json({ 
+                    success: true, 
+                    savedScans: formattedRows
+                  });
+                }
+              });
+            })
+            .catch((initErr) => {
+              console.error('Failed to initialize saved_scans table:', initErr);
+              res.status(500).json({ 
+                success: false, 
+                error: 'Failed to initialize database table' 
+              });
+            });
+        } else {
+          res.status(500).json({ 
+            success: false, 
+            error: 'Failed to fetch saved scans: ' + err.message
+          });
+        }
+      } else {
+        // Format rows to match expected structure
+        const formattedRows = (rows || []).map(row => ({
+          ...row,
+          created_at: row.saved_at,
+          scanned_at: row.saved_at
+        }));
+        
+        res.json({ 
+          success: true, 
+          savedScans: formattedRows
+        });
+      }
     });
   } catch (error) {
     console.error('Error getting saved scans:', error);
     res.status(500).json({ 
       success: false, 
-      error: 'Failed to get saved scans' 
+      error: 'Failed to get saved scans: ' + error.message
     });
   }
 });
 
 // Delete saved scan endpoint
-app.delete('/api/saved-scans/:id', async (req, res) => {
+app.delete('/api/saved-scans/:id', (req, res) => {
   try {
     const { id } = req.params;
     
-    const sql = `DELETE FROM saved_scans WHERE id = $1`;
+    const sql = `DELETE FROM saved_scans WHERE id = ?`;
     
-    const result = await pool.query(sql, [id]);
-    
-    if (result.rowCount === 0) {
-      console.log('⚠️ No saved scan found with ID:', id);
-      res.status(404).json({ 
-        success: false, 
-        error: 'Saved scan not found' 
-      });
-    } else {
-      console.log(`🗑️ Deleted saved scan ID: ${id}`);
-      res.json({ 
-        success: true, 
-        message: 'Saved scan deleted successfully',
-        deletedId: id
-      });
-    }
+    db.run(sql, [id], function(err) {
+      if (err) {
+        console.error('Error deleting saved scan:', err);
+        res.status(500).json({ 
+          success: false, 
+          error: 'Failed to delete saved scan' 
+        });
+      } else {
+        console.log(`🗑️ Deleted saved scan ID: ${id}`);
+        res.json({ 
+          success: true, 
+          message: 'Saved scan deleted successfully',
+          deletedId: id
+        });
+      }
+    });
   } catch (error) {
     console.error('Error deleting saved scan:', error);
     res.status(500).json({ 
@@ -1442,17 +1326,25 @@ app.delete('/api/saved-scans/:id', async (req, res) => {
 });
 
 // Clear ALL saved scans endpoint
-app.delete('/api/saved-scans', async (req, res) => {
+app.delete('/api/saved-scans', (req, res) => {
   try {
     const sql = `DELETE FROM saved_scans`;
     
-    const result = await pool.query(sql);
-    
-    console.log(`🗑️ Cleared all saved scans. ${result.rowCount} rows deleted.`);
-    res.json({ 
-      success: true, 
-      message: 'All saved scans cleared successfully',
-      deletedCount: result.rowCount
+    db.run(sql, [], function(err) {
+      if (err) {
+        console.error('Error clearing saved scans:', err);
+        res.status(500).json({ 
+          success: false, 
+          error: 'Failed to clear saved scans' 
+        });
+      } else {
+        console.log(`🗑️ Cleared all saved scans. ${this.changes} rows deleted.`);
+        res.json({ 
+          success: true, 
+          message: 'All saved scans cleared successfully',
+          deletedCount: this.changes
+        });
+      }
     });
   } catch (error) {
     console.error('Error clearing saved scans:', error);
@@ -1464,17 +1356,25 @@ app.delete('/api/saved-scans', async (req, res) => {
 });
 
 // Clear GM77_SCAN entries from saved scans
-app.delete('/api/saved-scans/gm77', async (req, res) => {
+app.delete('/api/saved-scans/gm77', (req, res) => {
   try {
     const sql = `DELETE FROM saved_scans WHERE barcode_type = 'GM77_SCAN'`;
     
-    const result = await pool.query(sql);
-    
-    console.log(`🗑️ Cleared ${result.rowCount} GM77_SCAN entries from saved scans.`);
-    res.json({ 
-      success: true, 
-      message: 'GM77_SCAN entries cleared successfully',
-      deletedCount: result.rowCount
+    db.run(sql, [], function(err) {
+      if (err) {
+        console.error('Error clearing GM77_SCAN entries:', err);
+        res.status(500).json({ 
+          success: false, 
+          error: 'Failed to clear GM77_SCAN entries' 
+        });
+      } else {
+        console.log(`🗑️ Cleared ${this.changes} GM77_SCAN entries from saved scans.`);
+        res.json({ 
+          success: true, 
+          message: 'GM77_SCAN entries cleared successfully',
+          deletedCount: this.changes
+        });
+      }
     });
   } catch (error) {
     console.error('Error clearing GM77_SCAN entries:', error);
@@ -1486,7 +1386,7 @@ app.delete('/api/saved-scans/gm77', async (req, res) => {
 });
 
 // Get barcode statistics
-app.get('/api/barcodes/stats', async (req, res) => {
+app.get('/api/barcodes/stats', (req, res) => {
   try {
     const sql = `
       SELECT 
@@ -1497,32 +1397,39 @@ app.get('/api/barcodes/stats', async (req, res) => {
       GROUP BY source, barcode_type
     `;
     
-    const result = await pool.query(sql);
-    const rows = result.rows;
-    
-    const stats = {
-      bySource: {},
-      byType: {},
-      total: 0
-    };
-    
-    rows.forEach(row => {
-      stats.total += parseInt(row.count);
-      
-      if (!stats.bySource[row.source]) {
-        stats.bySource[row.source] = 0;
+    db.all(sql, [], (err, rows) => {
+      if (err) {
+        console.error('Error fetching barcode stats:', err);
+        res.status(500).json({ 
+          success: false, 
+          error: 'Failed to fetch statistics' 
+        });
+      } else {
+        const stats = {
+          bySource: {},
+          byType: {},
+          total: 0
+        };
+        
+        rows.forEach(row => {
+          stats.total += row.count;
+          
+          if (!stats.bySource[row.source]) {
+            stats.bySource[row.source] = 0;
+          }
+          stats.bySource[row.source] += row.count;
+          
+          if (!stats.byType[row.barcode_type]) {
+            stats.byType[row.barcode_type] = 0;
+          }
+          stats.byType[row.barcode_type] += row.count;
+        });
+        
+        res.json({ 
+          success: true, 
+          stats 
+        });
       }
-      stats.bySource[row.source] += parseInt(row.count);
-      
-      if (!stats.byType[row.barcode_type]) {
-        stats.byType[row.barcode_type] = 0;
-      }
-      stats.byType[row.barcode_type] += parseInt(row.count);
-    });
-    
-    res.json({ 
-      success: true, 
-      stats 
     });
   } catch (error) {
     console.error('Error getting barcode statistics:', error);
@@ -2019,7 +1926,6 @@ const startServer = async () => {
     console.log('✅ Database connection initialized');
     
     // Initialize tables
-    await initUsersTable();
     await initBarcodesTable();
     await initSavedScansTable();
   } catch (error) {
@@ -2037,9 +1943,9 @@ const startServer = async () => {
     console.log(`🤖 AI Server: ${AI_SERVER_URL}`);
     console.log(`🏷️  Flask Server: http://localhost:5000`);
     console.log(`🔌 WebSocket server active on port ${PORT}`);
-    console.log(`🗄️  Database: PostgreSQL (${process.env.DATABASE_URL ? 'Connected' : 'Not configured'})`);
+    console.log(`🗄️  Database: ${db ? 'Connected' : 'Not connected'}`);
     if (NODE_ENV === 'production') {
-      console.log(`🌐 Production URL: https://robridgeexpress.onrender.com`);
+      console.log(`🌐 Production URL: https://robridge-express.onrender.com`);
     } else {
       console.log(`🌐 Local URL: http://localhost:${PORT}`);
     }
