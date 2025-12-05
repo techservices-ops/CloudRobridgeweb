@@ -1,0 +1,584 @@
+.robot-data-monitor {
+  min-height: 100vh;
+  background: #2c2c2c;
+  color: #e0e0e0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  padding: 20px;
+}
+
+.robot-data-monitor.fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1000;
+  background: #2c2c2c;
+  padding: 0;
+}
+
+/* Header */
+.monitor-header {
+  text-align: center;
+  margin-bottom: 30px;
+  padding: 20px 0;
+}
+
+.monitor-header h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: #e0e0e0;
+  margin: 0 0 8px 0;
+  letter-spacing: 0.5px;
+}
+
+.monitor-header p {
+  font-size: 16px;
+  color: #b0b0b0;
+  margin: 0;
+  font-weight: 400;
+}
+
+/* Main Dashboard */
+.monitor-dashboard {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+  height: calc(100vh - 120px);
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* LIDAR Panel */
+.lidar-panel {
+  background: #3a3a3a;
+  border: 2px solid #E3821E;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-header {
+  background: #2c2c2c;
+  padding: 16px 20px;
+  border-bottom: 1px solid #4a4a4a;
+}
+
+.panel-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #e0e0e0;
+  margin: 0;
+  letter-spacing: 0.3px;
+}
+
+.lidar-container {
+  flex: 1;
+  position: relative;
+  background: #1a1a1a;
+  display: flex;
+  flex-direction: column;
+}
+
+.lidar-canvas {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: #1a1a1a;
+}
+
+.lidar-content {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-origin: center center;
+  transition: transform 0.3s ease;
+}
+
+.lidar-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+.lidar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.8;
+  filter: brightness(0.8) contrast(1.2);
+}
+
+.lidar-grid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    linear-gradient(rgba(227, 130, 30, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(227, 130, 30, 0.1) 1px, transparent 1px);
+  background-size: 40px 40px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.robot-marker {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  z-index: 10;
+  transform: translate(-50%, -50%);
+}
+
+.marker-dot {
+  width: 100%;
+  height: 100%;
+  background: #E3821E;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(227, 130, 30, 0.8);
+  animation: pulse 2s infinite;
+}
+
+.trajectory-line {
+  position: absolute;
+  top: 50%;
+  left: 20%;
+  width: 60%;
+  height: 2px;
+  background: linear-gradient(90deg, #8B4513, #E3821E);
+  z-index: 3;
+  transform: translateY(-50%);
+  box-shadow: 0 0 5px rgba(139, 69, 19, 0.5);
+}
+
+/* Legend */
+.lidar-legend {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid #4a4a4a;
+  z-index: 15;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: #e0e0e0;
+}
+
+.legend-item:last-child {
+  margin-bottom: 0;
+}
+
+.legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+}
+
+.legend-dot.initial {
+  background: #34A853;
+}
+
+.legend-dot.final {
+  background: #EA4335;
+}
+
+.legend-line {
+  width: 20px;
+  height: 2px;
+  background: #8B4513;
+  border-radius: 1px;
+}
+
+/* Telemetry Panel */
+.telemetry-panel {
+  background: #3a3a3a;
+  border: 2px solid #E3821E;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.telemetry-panel .panel-header p {
+  font-size: 14px;
+  color: #b0b0b0;
+  margin: 4px 0 0 0;
+  font-weight: 400;
+}
+
+.telemetry-cards {
+  flex: 1;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.telemetry-card {
+  background: #2c2c2c;
+  border: 1px solid #4a4a4a;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition: all 0.3s ease;
+  min-height: 70px;
+}
+
+.telemetry-card:hover {
+  background: #333333;
+  border-color: #E3821E;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.card-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.card-icon.battery {
+  background: rgba(52, 168, 83, 0.2);
+  color: #34A853;
+}
+
+.card-icon.position {
+  background: rgba(66, 133, 244, 0.2);
+  color: #4285F4;
+}
+
+.card-icon.orientation {
+  background: rgba(251, 188, 5, 0.2);
+  color: #FBBC05;
+}
+
+.card-icon.temperature {
+  background: rgba(234, 67, 53, 0.2);
+  color: #EA4335;
+}
+
+.card-icon.task {
+  background: rgba(0, 172, 193, 0.2);
+  color: #00ACC1;
+}
+
+.card-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.card-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #b0b0b0;
+  margin-bottom: 4px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.card-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #e0e0e0;
+  word-break: break-all;
+}
+
+/* Control Section */
+.control-section {
+  padding: 20px;
+  border-top: 1px solid #4a4a4a;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.control-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  min-height: 44px;
+}
+
+.control-btn.connected {
+  background: #34A853;
+  color: white;
+}
+
+.control-btn.disconnected {
+  background: #EA4335;
+  color: white;
+}
+
+.control-btn.running {
+  background: #FBBC05;
+  color: #2c2c2c;
+}
+
+.control-btn.stopped {
+  background: #6c757d;
+  color: white;
+}
+
+.control-btn.emergency {
+  background: #EA4335;
+  color: white;
+  animation: emergencyPulse 1s infinite;
+  font-weight: 700;
+}
+
+.control-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.control-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Emergency Alert */
+.emergency-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.3s ease;
+}
+
+.emergency-alert {
+  background: #2c2c2c;
+  padding: 40px;
+  border-radius: 16px;
+  border: 2px solid #EA4335;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  max-width: 500px;
+  animation: slideIn 0.3s ease;
+}
+
+.alert-icon {
+  font-size: 48px;
+  color: #EA4335;
+  animation: emergencyPulse 1s infinite;
+}
+
+.alert-content {
+  flex: 1;
+}
+
+.alert-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #EA4335;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.alert-message {
+  font-size: 16px;
+  color: #e0e0e0;
+  line-height: 1.4;
+}
+
+/* Animations */
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(227, 130, 30, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(227, 130, 30, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(227, 130, 30, 0);
+  }
+}
+
+@keyframes emergencyPulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { 
+    opacity: 0;
+    transform: translateY(-50px);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+  .monitor-dashboard {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  
+  .lidar-panel {
+    height: 500px;
+  }
+  
+  .telemetry-panel {
+    height: auto;
+  }
+}
+
+@media (max-width: 768px) {
+  .robot-data-monitor {
+    padding: 12px;
+  }
+  
+  .monitor-header h1 {
+    font-size: 24px;
+  }
+  
+  .monitor-header p {
+    font-size: 14px;
+  }
+  
+  .panel-header {
+    padding: 12px 16px;
+  }
+  
+  .panel-header h2 {
+    font-size: 16px;
+  }
+  
+  .telemetry-cards {
+    padding: 16px;
+  }
+  
+  .telemetry-card {
+    padding: 12px;
+    min-height: 60px;
+  }
+  
+  .card-icon {
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+  }
+  
+  .card-label {
+    font-size: 11px;
+  }
+  
+  .card-value {
+    font-size: 14px;
+  }
+  
+  .control-section {
+    padding: 16px;
+  }
+  
+  .control-btn {
+    padding: 10px 16px;
+    font-size: 13px;
+    min-height: 40px;
+  }
+  
+  .emergency-alert {
+    margin: 20px;
+    padding: 24px;
+  }
+  
+  .alert-title {
+    font-size: 20px;
+  }
+  
+  .alert-message {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .monitor-header h1 {
+    font-size: 20px;
+  }
+  
+  .lidar-legend {
+    top: 10px;
+    left: 10px;
+    padding: 8px 12px;
+  }
+  
+  .legend-item {
+    font-size: 11px;
+  }
+  
+  .telemetry-card {
+    gap: 12px;
+  }
+  
+  .card-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+}

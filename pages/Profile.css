@@ -1,0 +1,465 @@
+.profile-page {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+}
+
+.loading-spinner {
+  font-size: 18px;
+  color: #7f8c8d;
+  text-align: center;
+}
+
+.profile-header {
+  margin-bottom: 30px;
+}
+
+.profile-header h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: #2c3e50;
+  margin-bottom: 8px;
+}
+
+.profile-header p {
+  font-size: 16px;
+  color: #7f8c8d;
+  margin: 0;
+}
+
+.profile-container {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 60vh;
+  padding: 20px 0;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  grid-template-rows: repeat(6, minmax(120px, auto));
+  gap: 20px;
+  width: 100%;
+  max-width: 1200px;
+  min-height: 600px;
+  align-items: stretch;
+}
+
+/* Profile Avatar Card - Large top left */
+.profile-avatar-card {
+  grid-column: 1 / 5;
+  grid-row: 1 / 4;
+  background: linear-gradient(135deg, #E3821E 0%, #D6730A 100%);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  box-shadow: 0 4px 12px rgba(227, 130, 30, 0.3);
+}
+
+.avatar-icon {
+  width: 80px;
+  height: 80px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border-radius: 50%;
+  backdrop-filter: blur(10px);
+  margin-bottom: 16px;
+}
+
+.avatar-name {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.avatar-role {
+  font-size: 14px;
+  opacity: 0.9;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* User ID Card - Small top right */
+.user-id-card {
+  grid-column: 5 / 7;
+  grid-row: 1 / 2;
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-left: 4px solid #E3821E;
+}
+
+/* Phone Card - Small top right */
+.phone-card {
+  grid-column: 7 / 9;
+  grid-row: 1 / 2;
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-left: 4px solid #E3821E;
+}
+
+/* Password Card - Small top right */
+.password-card {
+  grid-column: 9 / 11;
+  grid-row: 1 / 2;
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-left: 4px solid #E3821E;
+}
+
+/* Email Card - Medium top right */
+.email-card {
+  grid-column: 11 / 13;
+  grid-row: 1 / 3;
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-left: 4px solid #E3821E;
+}
+
+/* Role Card - Medium bottom right */
+.role-card {
+  grid-column: 5 / 11;
+  grid-row: 2 / 3;
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-left: 4px solid #E3821E;
+}
+
+/* Company Card - Next to user card */
+.company-card {
+  grid-column: 1 / 5;
+  grid-row: 4 / 5;
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-left: 4px solid #E3821E;
+}
+
+/* Stats Card - Next to company card */
+.stats-card {
+  grid-column: 5 / 13;
+  grid-row: 3 / 5;
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-left: 4px solid #E3821E;
+}
+
+/* Card Content Styles */
+.card-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #7f8c8d;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.card-icon {
+  font-size: 16px;
+  color: #E3821E;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  flex: 1;
+}
+
+.stat-item .card-label {
+  justify-content: center;
+}
+
+.stat-item .card-value {
+  font-size: 16px;
+}
+
+.info-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #7f8c8d;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.info-icon {
+  font-size: 16px;
+  color: #E3821E;
+}
+
+.info-value {
+  font-size: 18px;
+  font-weight: 500;
+  color: #2c3e50;
+  padding-left: 24px;
+}
+
+.password-field {
+  font-family: 'Courier New', monospace;
+  letter-spacing: 2px;
+  background-color: #f8f9fa;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+  display: inline-block;
+}
+
+.role-badge {
+  display: inline-block;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.role-badge-admin {
+  background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(231, 76, 60, 0.3);
+}
+
+.role-badge-expo {
+  background: linear-gradient(135deg, #E3821E 0%, #D6730A 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(227, 130, 30, 0.3);
+}
+
+.role-badge-full {
+  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
+}
+
+.role-badge-default {
+  background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(149, 165, 166, 0.3);
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .profile-grid {
+    grid-template-columns: repeat(6, 1fr);
+    grid-template-rows: repeat(12, 1fr);
+    height: auto;
+    min-height: 800px;
+  }
+
+  .profile-avatar-card {
+    grid-column: 1 / 4;
+    grid-row: 1 / 4;
+  }
+
+  .user-id-card {
+    grid-column: 4 / 5;
+    grid-row: 1 / 2;
+  }
+
+  .phone-card {
+    grid-column: 5 / 6;
+    grid-row: 1 / 2;
+  }
+
+  .password-card {
+    grid-column: 6 / 7;
+    grid-row: 1 / 2;
+  }
+
+  .email-card {
+    grid-column: 4 / 7;
+    grid-row: 2 / 4;
+  }
+
+  .role-card {
+    grid-column: 4 / 7;
+    grid-row: 1 / 2;
+  }
+
+  .company-card {
+    grid-column: 1 / 4;
+    grid-row: 4 / 5;
+  }
+
+  .stats-card {
+    grid-column: 4 / 7;
+    grid-row: 3 / 5;
+  }
+}
+
+@media (max-width: 768px) {
+  .profile-page {
+    padding: 16px;
+  }
+
+  .profile-header h1 {
+    font-size: 24px;
+  }
+
+  .profile-header p {
+    font-size: 14px;
+  }
+
+  .profile-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    height: auto;
+    gap: 16px;
+  }
+
+  .profile-avatar-card,
+  .user-id-card,
+  .phone-card,
+  .password-card,
+  .email-card,
+  .role-card,
+  .company-card,
+  .stats-card {
+    grid-column: 1;
+    grid-row: auto;
+    height: auto;
+    min-height: 120px;
+  }
+
+  .avatar-icon {
+    width: 60px;
+    height: 60px;
+    padding: 15px;
+  }
+
+  .avatar-name {
+    font-size: 20px;
+  }
+
+  .card-value {
+    font-size: 16px;
+  }
+
+  .password-field {
+    font-size: 14px;
+    padding: 6px 10px;
+  }
+
+  .stats-card {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .stat-item {
+    padding: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .profile-grid {
+    gap: 12px;
+  }
+
+  .profile-avatar-card,
+  .user-id-card,
+  .phone-card,
+  .password-card,
+  .email-card,
+  .role-card,
+  .company-card,
+  .stats-card {
+    min-height: 100px;
+    padding: 16px;
+  }
+
+  .avatar-icon {
+    width: 50px;
+    height: 50px;
+    padding: 12px;
+  }
+
+  .avatar-name {
+    font-size: 18px;
+  }
+
+  .avatar-role {
+    font-size: 12px;
+  }
+
+  .card-label {
+    font-size: 10px;
+  }
+
+  .card-value {
+    font-size: 14px;
+  }
+
+  .role-badge {
+    font-size: 12px;
+    padding: 4px 12px;
+  }
+
+  .password-field {
+    font-size: 12px;
+    padding: 4px 8px;
+    letter-spacing: 1px;
+  }
+}
